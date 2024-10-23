@@ -14,7 +14,6 @@ export const Receiver = () => {
             socket.send(JSON.stringify({ type: 'receiver' }));
         };
 
-        // Start receiving messages after connection is opened
         startReceiving(socket);
 
         return () => {
@@ -22,7 +21,7 @@ export const Receiver = () => {
         };
     }, []);
 
-    function startReceiving(socket: WebSocket) {
+    const startReceiving = (socket: WebSocket) => {
         socket.onmessage = async (event) => {
             const message = JSON.parse(event.data);
             console.log('Receiver received message:', message);
@@ -37,7 +36,7 @@ export const Receiver = () => {
                 await pc?.addIceCandidate(new RTCIceCandidate(message.candidate));
             }
         };
-    }
+    };
 
     const createPeerConnection = async (remoteSdp?: RTCSessionDescriptionInit) => {
         const peerConnection = new RTCPeerConnection();
@@ -61,7 +60,7 @@ export const Receiver = () => {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(remoteSdp));
             const answer = await peerConnection.createAnswer();
             await peerConnection.setLocalDescription(answer);
-            socket?.send(JSON.stringify({ type: 'createAnswer', sdp: answer }));
+            socket?.send(JSON.stringify({ type: 'createAnswer', sdp: answer.sdp }));
         }
 
         setPC(peerConnection);
