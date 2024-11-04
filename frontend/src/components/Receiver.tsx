@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const Receiver = () => {
+    const videoRef = useRef<HTMLVideoElement>(null); 
     useEffect(() => {
         const socket = new WebSocket('ws://localhost:8080');
 
@@ -22,23 +23,13 @@ export const Receiver = () => {
                 await pc.setLocalDescription(answer);
 
                 // Handler for incoming tracks
-                pc.ontrack = (event) => {
-                    console.log("Track received:", event.track);
-                    
-                    // Create a video element for the received track
-                    const video = document.createElement('video');
-                    video.autoplay = true; // Ensure the video plays automatically
-                    video.style.width = '100%'; // Make the video responsive
-                    video.style.height = 'auto';
-
-                    // Create a MediaStream and attach the track
-                    const mediaStream = new MediaStream([event.track]);
-                    video.srcObject = mediaStream;
-
-                    // Append the video to the body or a specific container
-                    document.body.appendChild(video);
+                pc.ontrack = async(event) => {
+                    console.log(event , "event")
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = new MediaStream([event.track]);
+                        await videoRef.current.play();
+                    }
                 };
-
                 pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         socket.send(JSON.stringify({ type: "iceCandidate", candidate: event.candidate }));
@@ -62,6 +53,7 @@ export const Receiver = () => {
     return (
         <div>
             <h2>Receiver</h2>
+            <video ref={videoRef} autoPlay playsInline style={{ width: "300px", marginTop: "10px" }} />
         </div>
     );
 };
