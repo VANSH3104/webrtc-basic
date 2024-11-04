@@ -8,15 +8,19 @@ wss.on('connection', function connection(ws){
     const message = JSON.parse(data)
     if(message.type === "sender"){
         senderSocket= ws
+        console.log("sender set")
     }
     else if(message.type === "receiver"){
         receiverSocket = ws;
+        console.log("receiver set")
     }
     else if (message.type === "createOffer"){
         receiverSocket?.send(JSON.stringify({type: "createOffer" , sdp: message.sdp}))
+        console.log("offer create")
     }
     else if(message.type === "createAnswer"){
         senderSocket?.send(JSON.stringify({type: "createAnswer" , sdp: message.sdp}))
+        console.log("answer create")
     }
     else if(message.type === "iceCandidate"){
         if(ws === senderSocket){
