@@ -1,4 +1,5 @@
 advance/backend/dist/
 basic/backend/dist/
-advance/frontend/node_modules
-basic/frontend/node_modules
+advance/backend/node_modules/
+advance/frontend/node_modules/
+basic/frontend/node_modules/
