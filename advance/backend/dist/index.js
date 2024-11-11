@@ -9,7 +9,7 @@ wss.on('connection', function connection(ws) {
     console.log("websocket is running...");
     ws.on("message", function message(data) {
         const message = JSON.parse(data);
-        if (message.type === "sender") {
+        if (message.type === "sender" && message.meetId != "") {
             senderSocket = ws;
             console.log("sender set");
             id = message.meetId;
@@ -17,9 +17,9 @@ wss.on('connection', function connection(ws) {
         else if (message.type === "receiver" && message.meetId == id) {
             console.log(message.meetId, id, "id");
             receiverSocket.push(ws);
-            console.log("receiver set", receiverSocket);
+            console.log("receiver set");
+            console.log(receiverSocket.length);
         }
-        console.log(message);
     });
     // wss.on('connection', function connection(ws) {
     //     ws.on("message", function message(data: any) {
