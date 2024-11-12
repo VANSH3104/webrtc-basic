@@ -1,45 +1,70 @@
-"use client"
+// Receiver.tsx
+import React, { useState, useRef } from 'react';
+import { createWebSocket, createPeerConnection } from './utils/rtcutils';
 
-import { useEffect, useState } from "react"
+export const Receiver: React.FC = () => {
+  const [meetingId, setMeetingId] = useState<string>('');
+  const [passcode] = useState<string>('12345'); // Static passcode for simplicity
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
+  const socket = useRef<WebSocket | null>(null);
 
-export const Receiver = ()=>{
-    const [input , setinput] = useState("");
-    const [result , setresult] = useState("")
-    const [socket, setSocket] = useState<WebSocket | null>(null);
-    useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8080');
+  const joinMeeting = () => {
+    socket.current = createWebSocket('ws://localhost:8080');
+    peerConnection.current = createPeerConnection();
 
-        socket.onopen = () => {
-            console.log("Sender connected to server");
-            socket.send(JSON.stringify({ type: "receiver" , meetId:result }));
-        };
+    socket.current.onopen = () => {
+      socket.current?.send(JSON.stringify({
+        type: 'joinMeeting',
+        meetingId,
+        passcode,
+      }));
+    };
 
-        socket.onerror = (error) => {
-            console.error("WebSocket error:", error);
-        };
+    const setupLocalStream = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getTracks().forEach(track => peerConnection.current?.addTrack(track, stream));
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    };
 
-        setSocket(socket);
+    setupLocalStream();
 
-        return () => {
-            if (socket) {
-                socket.close();
-            }
-        };
-    }, [result]);
+    socket.current.onmessage = async (event) => {
+      const message = JSON.parse(event.data);
 
-    function ChangeResult(){
-        setresult(input);
-    }
-    return(
-        <div>
-            <h2>name</h2>
-            <input placeholder="name" onChange={(e)=>{
-                setinput(e.target.value)
-            }}></input>
-            <div>
-                <button onClick={ChangeResult}>join a Meeting</button>
-                <span>{result}</span>
-            </div>
-        </div>
-    )
-}
+      switch (message.type) {
+        case 'offer':
+          { await peerConnection.current?.setRemoteDescription(new RTCSessionDescription(message.sdp));
+          const answer = await peerConnection.current?.createAnswer();
+          if (answer) {
+            await peerConnection.current?.setLocalDescription(answer);
+            socket.current?.send(JSON.stringify({ type: 'answer', meetingId, sdp: answer }));
+          }
+          break; }
+        case 'iceCandidate':
+          { const candidate = new RTCIceCandidate(message.candidate);
+          await peerConnection.current?.addIceCandidate(candidate);
+          break; }
+      }
+    };
+
+    peerConnection.current.onicecandidate = event => {
+      if (event.candidate) {
+        socket.current?.send(JSON.stringify({ type: 'iceCandidate', meetingId, candidate: event.candidate }));
+      }
+    };
+  };
+
+  return (
+    <div>
+      <h1>Receiver</h1>
+      <input
+        type="text"
+        placeholder="Enter Meeting ID"
+        onChange={(e) => setMeetingId(e.target.value)}
+      />
+      <button onClick={joinMeeting}>Join Meeting</button>
+      <video ref={videoRef} autoPlay playsInline muted />
+    </div>
+  );
+};
