@@ -9,7 +9,7 @@ export const Sender = () => {
 
         socket.onopen = () => {
             console.log("Sender connected to server");
-            socket.send(JSON.stringify({ type: "sender" }));
+            socket.send(JSON.stringify({ type: "createMeeting" }));
         };
 
         socket.onerror = (error) => {

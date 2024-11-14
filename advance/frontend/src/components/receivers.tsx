@@ -4,7 +4,7 @@ import { createWebSocket, createPeerConnection } from './utils/rtcutils';
 
 export const Receiver: React.FC = () => {
   const [meetingId, setMeetingId] = useState<string>('');
-  const [passcode] = useState<string>('12345'); // Static passcode for simplicity
+  const [passcode] = useState<string>(''); // Static passcode for simplicity
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
   const socket = useRef<WebSocket | null>(null);
