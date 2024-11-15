@@ -20,6 +20,9 @@ wss.on("connection", (ws) => {
             case "iceCandidate":
                 handleSignaling(ws, message);
                 break;
+            case "receiver":
+                handleReceiver(ws, message); // Handle receiver message
+                break;
             default:
                 console.error("Unknown message type:", message.type);
         }
@@ -71,6 +74,12 @@ function handleSignaling(ws, message) {
             }
         });
     }
+}
+function handleReceiver(ws, message) {
+    console.log("Receiver message received:", message);
+    ws.send(JSON.stringify({ type: "receiverAcknowledged" }));
+    const meetingId = message.meetingId;
+    notifyParticipants(meetingId, { type: "newReceiver", meetingId });
 }
 function notifyParticipants(meetingId, message) {
     const meeting = meetings.get(meetingId);
