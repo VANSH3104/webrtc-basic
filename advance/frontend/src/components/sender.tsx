@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createWebSocket, createPeerConnection } from './utils/rtcutils';
 
 export const Sender: React.FC = () => {
@@ -56,26 +56,62 @@ export const Sender: React.FC = () => {
   }, []);
 
   // Toggle Video
-  const toggleVideo = () => {
-    setIsVideoOn(prev => !prev);
-    if (streamRef.current) {
-      const videoTrack = streamRef.current.getVideoTracks()[0];
+  // Toggle Video
+const toggleVideo = useCallback(() => {
+  setIsVideoOn((prev) => {
+    const newVideoState = !prev;
+    if (newVideoState) {
+      // If video is being turned on
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((videoStream) => {
+          const videoTrack = videoStream.getVideoTracks()[0];
+          if (videoTrack) {
+            streamRef.current?.addTrack(videoTrack);
+            peerConnection.current?.addTrack(videoTrack, streamRef.current!);
+            if (videoRef.current) {
+              videoRef.current.srcObject = streamRef.current;
+            }
+          }
+        })
+        .catch((error) => console.error("Error accessing video:", error));
+    } else {
+      // If video is being turned off
+      const videoTrack = streamRef.current?.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled; // Toggle video track
+        videoTrack.stop(); // Stop video track
+        streamRef.current?.removeTrack(videoTrack);
       }
     }
-  };
+    return newVideoState;
+  });
+}, []);
 
-  // Toggle Audio
-  const toggleAudio = () => {
-    setIsAudioOn(prev => !prev);
-    if (streamRef.current) {
-      const audioTrack = streamRef.current.getAudioTracks()[0];
+// Toggle Audio
+const toggleAudio = useCallback(() => {
+  setIsAudioOn((prev) => {
+    const newAudioState = !prev;
+    if (newAudioState) {
+      // If audio is being turned on
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((audioStream) => {
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (audioTrack) {
+            streamRef.current?.addTrack(audioTrack);
+            peerConnection.current?.addTrack(audioTrack, streamRef.current!);
+          }
+        })
+        .catch((error) => console.error("Error accessing audio:", error));
+    } else {
+      // If audio is being turned off
+      const audioTrack = streamRef.current?.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled; // Toggle audio track
+        audioTrack.stop(); // Stop audio track
+        streamRef.current?.removeTrack(audioTrack);
       }
     }
-  };
+    return newAudioState;
+  });
+}, []);
 
   // Handle media stream setup
   useMemo(() => {
@@ -85,7 +121,7 @@ export const Sender: React.FC = () => {
       try {
         // Get the stream with both video and audio enabled based on toggles
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: isVideoOn ? true: false,
+          video: isVideoOn,
           audio: isAudioOn ? true : false 
         });
 
@@ -144,9 +180,11 @@ export const Sender: React.FC = () => {
       <button onClick={startSendVideo} disabled={isStreaming}>Start Streaming</button>
       {isVideoOn && (
         <video
+          className={`${isVideoOn ? '' : 'hidden'}`}
           ref={videoRef}
           autoPlay
           playsInline
+          typeof='video/webm'
           style={{ width: "300px", marginTop: "10px" }}
         />
       )}
