@@ -1,105 +1,63 @@
-import { useEffect, useState, useRef } from "react";
+import React, { useState } from "react";
+import { Sender } from "./sender";
+import { Receiver } from "./receivers";
 
-export const Room = () => {
-  const [peerConnections, setPeerConnections] = useState<RTCPeerConnection[]>([]);
-  const [streams, setStreams] = useState<MediaStream[]>([]); // Store streams for each sender
+export const Room: React.FC = () => {
+  const [meetingId, setMeetingId] = useState<string>("");
+  const [passcode, setPasscode] = useState<string>("");
+  const [role, setRole] = useState<"sender" | "receiver" | null>(null);
+  const [isMeetingCreated, setMeetingCreated] = useState<boolean>(false);
+  const ws = new WebSocket("ws://localhost:8080");
 
-  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]); // Ref array for all video elements
+  const createMeeting = () => {
+    const id = Math.random().toString(36).substr(2, 8); // Generate unique meeting ID
+    setMeetingId(id);
+    const code = Math.random().toString(36).substr(2, 5); // Generate random passcode
+    setPasscode(code);
 
-  useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8080');
+    ws.send(
+      JSON.stringify({
+        type: "createMeeting",
+        meetingId: id,
+        passcode: code,
+      })
+    );
+    setMeetingCreated(true);
+  };
 
-    socket.onopen = () => {
-      console.log("Receiver connected to server");
-      socket.send(JSON.stringify({ type: "receiver" }));
-    };
-
-    // Handle incoming messages
-    socket.onmessage = async (event) => {
-      const message = JSON.parse(event.data);
-      console.log("Received message:", message);
-
-      if (message.type === 'createOffer') {
-        const pc = new RTCPeerConnection();
-
-        pc.ontrack = (event) => {
-          console.log("Track received:", event);
-          if (event.streams[0]) {
-            // Add the stream for this sender
-            setStreams((prevStreams) => [...prevStreams, event.streams[0]]);
-          }
-        };
-
-        await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
-        console.log("Set remote description from sender");
-
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        console.log("Created answer");
-
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            console.log("Sending ICE candidate:", event.candidate);
-            socket.send(JSON.stringify({ type: "iceCandidate", candidate: event.candidate }));
-          }
-        };
-
-        socket.send(JSON.stringify({ type: "createAnswer", sdp: pc.localDescription }));
-        setPeerConnections((prev) => [...prev, pc]);
-      } else if (message.type === 'iceCandidate') {
-        // Handle ICE candidate for a peer connection
-        const pc = peerConnections.find((p) => p.remoteDescription?.type === 'offer');
-        if (pc) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
-            console.log("Added ICE candidate from sender");
-          } catch (err) {
-            console.error("Error adding ICE candidate:", err);
-          }
-        }
-      }
-    };
-
-    return () => {
-      socket.close();
-      // Close all peer connections when the component is unmounted
-      peerConnections.forEach((pc) => pc.close());
-    };
-  }, [peerConnections]);
-
-  const handleStartVideo = () => {
-    // Play all video streams using the ref array
-    streams.forEach((stream, index) => {
-      const videoElement = videoRefs.current[index];
-      if (videoElement) {
-        videoElement.srcObject = stream;
-        videoElement.play().catch((err) => console.error("Error playing video:", err));
-      }
-    });
+  const joinMeeting = (role: "sender" | "receiver") => {
+    ws.send(
+      JSON.stringify({
+        type: "joinMeeting",
+        meetingId,
+        passcode,
+        role,
+      })
+    );
+    setRole(role);
   };
 
   return (
     <div>
-      <h2>Receiver</h2>
-      {streams.length > 0 ? (
-        streams.map((stream, index) => (
-          <div key={index} style={{ marginBottom: "10px" }}>
-            <video
-              ref={(el) => (videoRefs.current[index] = el)} // Assigning refs dynamically to video elements
-              autoPlay
-              playsInline
-              style={{ width: "300px", marginTop: "10px" }}
-            />
-          </div>
-        ))
-      ) : (
-        <p>No video streams available</p>
+      {!isMeetingCreated && (
+        <>
+          <button onClick={createMeeting}>Create Meeting</button>
+          <br />
+        </>
       )}
-      {streams.length === 0 && (
-        <button onClick={handleStartVideo} style={{ marginTop: "10px" }}>
-          Start Video
-        </button>
+
+      {isMeetingCreated && !role && (
+        <div>
+          <h2>Meeting Created</h2>
+          <p>Meeting ID: {meetingId}</p>
+          <p>Passcode: {passcode}</p>
+          <button onClick={() => joinMeeting("sender")}>Join as Sender</button>
+          <button onClick={() => joinMeeting("receiver")}>Join as Receiver</button>
+        </div>
       )}
+
+      {role === "sender" && <Sender meetingId={meetingId} passcode={passcode} />}
+      {role === "receiver" && <Receiver meetingId={meetingId} passcode={passcode} />}
     </div>
   );
 };
