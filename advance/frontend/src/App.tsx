@@ -10,6 +10,7 @@ function App() {
         <Route path="/sender" element={<Sender />} />
         <Route path="/receiver" element={<Receiver />} />
         <Route path='/room' element={<Room/>} />
+        <Route path ='/stream' element={<Room/>} />
       </Routes>
     </BrowserRouter>
   )

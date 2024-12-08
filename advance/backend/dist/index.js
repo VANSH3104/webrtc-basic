@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = require("ws");
-// Store meetings with their IDs, passcodes, and participants
 const meetings = new Map();
 const wss = new ws_1.WebSocketServer({ port: 8080 });
 wss.on("connection", (ws) => {
@@ -20,8 +19,8 @@ wss.on("connection", (ws) => {
             case "iceCandidate":
                 handleSignaling(ws, message);
                 break;
-            case "receiver":
-                handleReceiver(ws, message); // Handle receiver message
+            case "disconnectSender":
+                handleDisconnectSender(message.meetingId);
                 break;
             default:
                 console.error("Unknown message type:", message.type);
@@ -29,13 +28,7 @@ wss.on("connection", (ws) => {
     });
     ws.on("close", () => {
         console.log("A participant disconnected");
-        for (const [meetingId, meeting] of meetings.entries()) {
-            meeting.participants = meeting.participants.filter((p) => p !== ws);
-            if (meeting.participants.length === 0) {
-                meetings.delete(meetingId);
-                console.log(`Meeting ${meetingId} deleted`);
-            }
-        }
+        cleanupConnections(ws);
     });
 });
 function handleCreateMeeting(ws, message) {
@@ -44,48 +37,104 @@ function handleCreateMeeting(ws, message) {
         ws.send(JSON.stringify({ type: "error", message: "Meeting ID already exists" }));
     }
     else {
-        meetings.set(meetingId, { passcode, participants: [ws] });
+        meetings.set(meetingId, { passcode, sender: null, receivers: [] });
         ws.send(JSON.stringify({ type: "meetingCreated", meetingId }));
         console.log(`Meeting created with ID: ${meetingId}`);
     }
 }
 function handleJoinMeeting(ws, message) {
-    const { meetingId, passcode } = message;
+    const { meetingId, passcode, senderName } = message;
     const meeting = meetings.get(meetingId);
     if (!meeting) {
         ws.send(JSON.stringify({ type: "error", message: "Invalid meeting ID" }));
+        return;
     }
-    else if (meeting.passcode !== passcode) {
+    if (meeting.passcode !== passcode) {
         ws.send(JSON.stringify({ type: "error", message: "Incorrect passcode" }));
+        return;
+    }
+    if (!meeting.sender) {
+        meeting.sender = ws;
+        notifyParticipants(meetingId, {
+            type: "participantList",
+            participants: getParticipants(meeting),
+        });
+        ws.send(JSON.stringify({
+            type: "meetingJoined",
+            message: "You joined as the sender",
+        }));
     }
     else {
-        meeting.participants.push(ws);
-        ws.send(JSON.stringify({ type: "meetingJoined", meetingId }));
-        notifyParticipants(meetingId, { type: "newParticipant", meetingId });
+        meeting.receivers.push(ws);
+        notifyParticipants(meetingId, {
+            type: "participantList",
+            participants: getParticipants(meeting),
+        });
+        ws.send(JSON.stringify({
+            type: "meetingJoined",
+            message: "You joined as a receiver",
+        }));
     }
 }
 function handleSignaling(ws, message) {
     const { meetingId } = message;
     const meeting = meetings.get(meetingId);
     if (meeting) {
-        meeting.participants.forEach((participant) => {
+        const participants = [meeting.sender, ...meeting.receivers].filter(Boolean);
+        participants.forEach((participant) => {
             if (participant !== ws) {
                 participant.send(JSON.stringify(message));
             }
         });
     }
 }
-function handleReceiver(ws, message) {
-    console.log("Receiver message received:", message);
-    ws.send(JSON.stringify({ type: "receiverAcknowledged" }));
-    const meetingId = message.meetingId;
-    notifyParticipants(meetingId, { type: "newReceiver", meetingId });
+function handleDisconnectSender(meetingId) {
+    const meeting = meetings.get(meetingId);
+    if (meeting) {
+        meeting.sender = null;
+        notifyParticipants(meetingId, {
+            type: "participantList",
+            participants: getParticipants(meeting),
+        });
+    }
 }
 function notifyParticipants(meetingId, message) {
     const meeting = meetings.get(meetingId);
     if (meeting) {
-        meeting.participants.forEach((participant) => {
+        const participants = [meeting.sender, ...meeting.receivers].filter(Boolean);
+        participants.forEach((participant) => {
             participant.send(JSON.stringify(message));
         });
     }
 }
+function cleanupConnections(ws) {
+    for (const [meetingId, meeting] of meetings.entries()) {
+        if (meeting.sender === ws) {
+            meeting.sender = null;
+        }
+        meeting.receivers = meeting.receivers.filter((receiver) => receiver !== ws);
+        if (!meeting.sender && meeting.receivers.length === 0) {
+            meetings.delete(meetingId);
+        }
+        else {
+            notifyParticipants(meetingId, {
+                type: "participantList",
+                participants: getParticipants(meeting),
+            });
+        }
+    }
+}
+function getParticipants(meeting) {
+    const senderParticipant = meeting.sender
+        ? { id: "sender", name: "Sender", role: "sender" }
+        : null;
+    const receiverParticipants = meeting.receivers.map((receiver, index) => ({
+        id: `receiver-${index}`,
+        name: `Receiver ${index + 1}`,
+        role: "receiver",
+    }));
+    return senderParticipant
+        ? [senderParticipant, ...receiverParticipants]
+        : receiverParticipants;
+}
+console.log("WebSocket server started on ws://localhost:8080");

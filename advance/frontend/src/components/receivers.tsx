@@ -64,7 +64,7 @@ export const Receiver: React.FC = () => {
         onChange={(e) => setMeetingId(e.target.value)}
       />
       <button onClick={joinMeeting}>Join Meeting</button>
-      <video ref={videoRef} autoPlay playsInline muted />
+      <video ref={videoRef} autoPlay />
     </div>
   );
 };
