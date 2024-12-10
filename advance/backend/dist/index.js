@@ -1,36 +1,50 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = require("ws");
-let senderSocket = null;
-let receiverSocket = [];
-const wss = new ws_1.WebSocketServer({ port: 8080 });
-wss.on('connection', function connection(ws) {
-    ws.on("message", function message(data) {
+const server = new ws_1.WebSocketServer({ port: 3000 });
+let clients = []; // Array to store connected clients
+server.on("connection", (socket) => {
+    // Assign a unique ID for each client
+    const clientId = generateUniqueId();
+    clients.push({ id: clientId, socket });
+    // Notify all clients about the new connection
+    broadcast({ type: "new-connection", clientId });
+    socket.on("message", (data) => {
         const message = JSON.parse(data);
-        if (message.type === "sender") {
-            senderSocket = ws;
-            console.log("sender set");
+        const { type } = message;
+        switch (type) {
+            case "chat":
+                broadcast({ type: "chat", message: message.content, clientId }, clientId);
+                console.log("chatting started");
+                break;
+            case "ice-candidate":
+                broadcast(message, clientId);
+                console.log("ICE candidate transferred");
+                break;
+            case "leave":
+                handleClientLeave(clientId, socket);
+                break;
         }
-        else if (message.type === "receiver") {
-            receiverSocket.push(ws);
-            console.log("receiver set", receiverSocket);
-        }
-        else if (message.type === "createOffer") {
-            receiverSocket.forEach((receiver) => { receiver.send(JSON.stringify({ type: "createOffer", sdp: message.sdp })); });
-            console.log("offer create");
-        }
-        else if (message.type === "createAnswer") {
-            senderSocket === null || senderSocket === void 0 ? void 0 : senderSocket.send(JSON.stringify({ type: "createAnswer", sdp: message.sdp }));
-            console.log("answer create");
-        }
-        else if (message.type === "iceCandidate") {
-            if (ws === senderSocket) {
-                receiverSocket.forEach((receiver) => { receiver.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate })); });
-            }
-            else {
-                senderSocket === null || senderSocket === void 0 ? void 0 : senderSocket.send(JSON.stringify({ type: "iceCandidate", candidate: message.candidate }));
-            }
-        }
-        console.log(message);
+    });
+    socket.on("close", () => {
+        handleClientLeave(clientId, socket);
     });
 });
+function handleClientLeave(clientId, socket) {
+    clients = clients.filter(client => client.id !== clientId);
+    broadcast({ type: "client-left", clientId });
+    if (socket.readyState === socket.OPEN) {
+        socket.close(1000, "Client voluntarily left");
+    }
+    console.log(`Client ${clientId} has left.`);
+}
+function broadcast(message, senderId) {
+    clients.forEach(client => {
+        if (client.id !== senderId) {
+            client.socket.send(JSON.stringify(message));
+        }
+    });
+}
+function generateUniqueId() {
+    return Math.random().toString(36).substr(2, 9);
+}
