@@ -1,8 +1,8 @@
 import { WebSocketServer } from "ws";
 
 const server = new WebSocketServer({ port: 3000 });
-let clients: any[] = []; // Array to store connected clients
-
+let clients: any[] = [];
+let meetingId : any[] = [];
 server.on("connection", (socket: any) => {
   // Assign a unique ID for each client
   const clientId = generateUniqueId();
@@ -16,6 +16,10 @@ server.on("connection", (socket: any) => {
     const { type } = message;
 
     switch (type) {
+      case "create-meeting":
+        createMeeting(message);
+      case "join-meeting":
+        joinMeeting(message, clientId);
       case "chat":
         broadcast({ type: "chat", message: message.content, clientId }, clientId);
         console.log("chatting started");
@@ -46,9 +50,20 @@ function handleClientLeave(clientId: string, socket: any) {
 
   console.log(`Client ${clientId} has left.`);
 }
-
+function createMeeting(message:{type: string , code: string}){
+    meetingId.push(message.code)
+}
+function joinMeeting(message:{type:string, code: string}, clientId:string){
+    if(message.code){
+        meetingId.filter((e)=>{
+            if(e.code === message.code){
+                broadcast({type: "meeting-joined" , clientId})
+            }
+        })
+    }
+}
 function broadcast(message: { type: string; clientId: string; message?: any }, senderId?: string) {
-  clients.forEach(client => {
+  clients.forEach(client => {   
     if (client.id !== senderId) {
       client.socket.send(JSON.stringify(message));
     }

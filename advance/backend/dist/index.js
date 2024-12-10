@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const ws_1 = require("ws");
 const server = new ws_1.WebSocketServer({ port: 3000 });
-let clients = []; // Array to store connected clients
+let clients = [];
+let meetingId = [];
 server.on("connection", (socket) => {
     // Assign a unique ID for each client
     const clientId = generateUniqueId();
@@ -13,6 +14,10 @@ server.on("connection", (socket) => {
         const message = JSON.parse(data);
         const { type } = message;
         switch (type) {
+            case "create-meeting":
+                createMeeting(message);
+            case "join-meeting":
+                joinMeeting(message, clientId);
             case "chat":
                 broadcast({ type: "chat", message: message.content, clientId }, clientId);
                 console.log("chatting started");
@@ -37,6 +42,18 @@ function handleClientLeave(clientId, socket) {
         socket.close(1000, "Client voluntarily left");
     }
     console.log(`Client ${clientId} has left.`);
+}
+function createMeeting(message) {
+    meetingId.push(message.code);
+}
+function joinMeeting(message, clientId) {
+    if (message.code) {
+        meetingId.filter((e) => {
+            if (e.code === message.code) {
+                broadcast({ type: "meeting-joined", clientId });
+            }
+        });
+    }
 }
 function broadcast(message, senderId) {
     clients.forEach(client => {
