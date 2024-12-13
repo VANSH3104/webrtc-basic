@@ -1,93 +1,113 @@
 import { WebSocketServer } from "ws";
 
 const server = new WebSocketServer({ port: 3000 });
-let clients: { id: string; socket: any }[] = [];
-let meetings: { code: string; clients: string[] }[] = [];
+const clients = new Map();
+const meetings = new Map();
 
-server.on("connection", (socket: any) => {
-    const clientId = generateUniqueId();
-    clients.push({ id: clientId, socket });
+server.on("connection", (socket) => {
+  console.log("WebSocket server running on ws://localhost:3000");
+  const clientId = generateUniqueId();
+  clients.set(clientId, socket);
 
-    broadcast({ type: "new-connection", clientId });
+  socket.on("message", (data: any) => {
+    const message = JSON.parse(data);
+    const { type } = message;
 
-    socket.on("message", (data: any) => {
-        const message = JSON.parse(data);
-        const { type } = message;
+    switch (type) {
+      case "create-meeting":
+        createMeeting(message.code, clientId);
+        break;
+      case "join-meeting":
+        joinMeeting(message.code, clientId);
+        break;
+      case "signal":
+        handleSignal(message, clientId);
+        break;
+      case "ice-candidate":
+        handleIce(message, clientId);
+        break;
+      case "leave-meeting":
+        leaveMeeting(clientId);
+        break;
+      default:
+        console.error(`Unknown message type: ${type}`);
+    }
+  });
 
-        switch (type) {
-            case "create-meeting":
-                createMeeting(message);
-                break;
-            case "join-meeting":
-                joinMeeting(message, clientId);
-                break;
-            case "chat":
-                broadcast({ type: "chat", message: message.content, clientId }, clientId);
-                break;
-            case "ice-candidate":
-                broadcast(message, clientId);
-                break;
-            case "leave":
-                handleClientLeave(clientId, socket);
-                break;
-        }
-    });
-
-    socket.on("close", () => {
-        handleClientLeave(clientId, socket);
-    });
+  socket.on("close", () => {
+    leaveMeeting(clientId);
+    clients.delete(clientId);
+  });
 });
 
-function handleClientLeave(clientId: string, socket: any) {
-    clients = clients.filter(client => client.id !== clientId);
-    
-    meetings.forEach(meeting => {
-        meeting.clients = meeting.clients.filter(id => id !== clientId);
-        if (meeting.clients.length === 0) {
-            meetings = meetings.filter(m => m.code !== meeting.code);
+function createMeeting(code: string, clientId: string) {
+  if (!meetings.has(code)) {
+    meetings.set(code, new Set());
+    console.log(`Meeting ${code} created by ${clientId}.`);
+  }
+  joinMeeting(code, clientId);
+}
+
+function joinMeeting(code: string, clientId: string) {
+  const meeting = meetings.get(code);
+  if (meeting) {
+    meeting.add(clientId);
+    broadcastToMeeting(code, { type: "new-participant", clientId }, clientId);
+    console.log(`Client ${clientId} joined meeting ${code}.`);
+  } else {
+    console.error(`Meeting ${code} does not exist.`);
+  }
+}
+
+function handleSignal(message: { code: string; data: any }, senderId: string) {
+  const { code, data } = message;
+  broadcastToMeeting(code, { type: "signal", senderId, data }, senderId);
+}
+
+function handleIce(message: { code: string; candidate: any }, senderId: string) {
+  const { code, candidate } = message;
+  broadcastToMeeting(
+    code,
+    { type: "ice-candidate", senderId, candidate },
+    senderId
+  );
+}
+
+function leaveMeeting(clientId: string) {
+  for (const [code, meeting] of meetings) {
+    if (meeting.has(clientId)) {
+      meeting.delete(clientId);
+      broadcastToMeeting(code, { type: "participant-left", clientId });
+
+      console.log(`Client ${clientId} has left.`);
+
+      if (meeting.size === 0) {
+        meetings.delete(code);
+        console.log(`Meeting ${code} closed.`);
+      }
+      break;
+    }
+  }
+}
+
+function broadcastToMeeting(
+  code: string,
+  message: { type: string; [key: string]: any },
+  senderId?: string
+) {
+  const meeting = meetings.get(code);
+  if (meeting) {
+    for (const clientId of meeting) {
+      if (clientId !== senderId) {
+        const clientSocket = clients.get(clientId);
+        if (clientSocket) {
+          clientSocket.send(JSON.stringify(message));
         }
-    });
-
-    broadcast({ type: "client-left", clientId });
-    
-    if (socket.readyState === socket.OPEN) {
-        socket.close(1000, "Client voluntarily left");
+      }
     }
-
-    console.log(`Client ${clientId} has left.`);
-}
-
-function createMeeting(message: { type: string; code: string }) {
-    if (!meetings.find(meeting => meeting.code === message.code)) {
-        meetings.push({ code: message.code, clients: [] });
-        console.log(`Meeting ${message.code} created.`);
-    }
-}
-
-function joinMeeting(message: { type: string; code: string }, clientId: string) {
-    const meeting = meetings.find(meeting => meeting.code === message.code);
-
-    if (meeting) {
-        meeting.clients.push(clientId);
-        broadcast({ type: "meeting-joined", clientId }, clientId);
-        console.log(`Client ${clientId} joined meeting ${message.code}.`);
-    } else {
-        console.log(`Meeting ${message.code} does not exist.`);
-    }
-}
-
-function broadcast(message: { type: string; clientId?: string; message?: any }, senderId?: string) {
-    clients.forEach(client => {
-        if (client.id !== senderId) {
-            try {
-                client.socket.send(JSON.stringify(message));
-            } catch (error) {
-                console.error(`Error sending message to client ${client.id}:`, error);
-            }
-        }
-    });
+  }
 }
 
 function generateUniqueId() {
-    return Math.random().toString(36).substr(2, 9);
+  return Math.random().toString(36).substr(2, 9);
 }

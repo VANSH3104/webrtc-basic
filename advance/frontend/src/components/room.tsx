@@ -1,63 +1,34 @@
-import React, { useState } from "react";
-import { Sender } from "./sender";
-import { Receiver } from "./receivers";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export const Room: React.FC = () => {
-  const [meetingId, setMeetingId] = useState<string>("");
-  const [passcode, setPasscode] = useState<string>("");
-  const [role, setRole] = useState<"sender" | "receiver" | null>(null);
-  const [isMeetingCreated, setMeetingCreated] = useState<boolean>(false);
-  const ws = new WebSocket("ws://localhost:8080");
+const Home: React.FC = () => {
+  const [meetingCode, setMeetingCode] = useState<string>("");
+  const navigate = useNavigate();
 
-  const createMeeting = () => {
-    const id = Math.random().toString(36).substr(2, 8); // Generate unique meeting ID
-    setMeetingId(id);
-    const code = Math.random().toString(36).substr(2, 5); // Generate random passcode
-    setPasscode(code);
-
-    ws.send(
-      JSON.stringify({
-        type: "createMeeting",
-        meetingId: id,
-        passcode: code,
-      })
-    );
-    setMeetingCreated(true);
-  };
-
-  const joinMeeting = (role: "sender" | "receiver") => {
-    ws.send(
-      JSON.stringify({
-        type: "joinMeeting",
-        meetingId,
-        passcode,
-        role,
-      })
-    );
-    setRole(role);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (meetingCode.trim()) {
+      navigate(`/room/${meetingCode}`);
+    }
   };
 
   return (
-    <div>
-      {!isMeetingCreated && (
-        <>
-          <button onClick={createMeeting}>Create Meeting</button>
-          <br />
-        </>
-      )}
-
-      {isMeetingCreated && !role && (
-        <div>
-          <h2>Meeting Created</h2>
-          <p>Meeting ID: {meetingId}</p>
-          <p>Passcode: {passcode}</p>
-          <button onClick={() => joinMeeting("sender")}>Join as Sender</button>
-          <button onClick={() => joinMeeting("receiver")}>Join as Receiver</button>
-        </div>
-      )}
-
-      {role === "sender" && <Sender meetingId={meetingId} passcode={passcode} />}
-      {role === "receiver" && <Receiver meetingId={meetingId} passcode={passcode} />}
+    <div style={{ padding: "20px" }}>
+      <h1>Video Conferencing App</h1>
+      <form onSubmit={handleSubmit}>
+        <label>
+          Meeting Code:
+          <input
+            type="text"
+            value={meetingCode}
+            onChange={(e) => setMeetingCode(e.target.value)}
+            required
+          />
+        </label>
+        <button type="submit">Join/Create Meeting</button>
+      </form>
     </div>
   );
 };
+
+export default Home;

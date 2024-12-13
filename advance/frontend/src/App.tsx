@@ -1,20 +1,21 @@
-import './App.css'
-import { Route, BrowserRouter, Routes } from 'react-router-dom'
-import { Sender } from './components/sender'
-import { Receiver } from './components/receivers'
-import { Room } from './components/room'
-import { Stream } from './components/streaming'
-function App() {
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Home from "./components/room";
+import { Sender } from "./components/sender";
+import { Receiver } from "./components/receivers";
+import {Room} from "./components/streaming";
+
+const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
+        <Route path="/" element={<Home />} />
         <Route path="/sender" element={<Sender />} />
         <Route path="/receiver" element={<Receiver />} />
-        <Route path='/room' element={<Room/>} />
-        <Route path ='/stream' element={<Stream/>} />
+        <Route path="/room/:meetingCode" element={<Room />} />
       </Routes>
-    </BrowserRouter>
-  )
-}
+    </Router>
+  );
+};
 
-export default App
+export default App;
