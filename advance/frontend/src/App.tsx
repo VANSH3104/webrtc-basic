@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./components/room";
 import { Sender } from "./components/sender";
 import { Receiver } from "./components/receivers";
-import {Room} from "./components/streaming";
+import {Room }from "./components/streaming";
 
 const App: React.FC = () => {
   return (
@@ -12,7 +12,7 @@ const App: React.FC = () => {
         <Route path="/" element={<Home />} />
         <Route path="/sender" element={<Sender />} />
         <Route path="/receiver" element={<Receiver />} />
-        <Route path="/room/:meetingCode" element={<Room />} />
+        <Route path="/room/:meetingCode" element={<Room/>} />
       </Routes>
     </Router>
   );
